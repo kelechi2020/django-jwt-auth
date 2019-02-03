@@ -10,6 +10,9 @@ from rest_framework.test import APITestCase, APIClient
 from music.models import Songs
 from django.contrib.auth.models import User
 
+from music.serializers import SongSerializer
+
+
 class BaseViewTest(APITestCase):
     client = APIClient()
 
@@ -18,6 +21,32 @@ class BaseViewTest(APITestCase):
     def create_song(title="", artist=""):
         if title != "" and artist != "":
             Songs.objects.create(title=title, artist=artist)
+
+    def login_client(self, username="", password=""):
+        # get a token from DRF
+        url = reverse(
+            "create-token",
+            kwargs={
+                "version": "v1"
+            }
+        )
+        response = self.client.post(
+            url,
+            data=json.dumps(
+                {
+                    'username': username,
+                    'password': password
+                }
+            ),
+            content_type='application/json'
+        )
+        self.token = response.data['token']
+        # set the token in the header
+        self.client.credentials(
+            HTTP_AUTHORIZATION='Bearer ' + self.token
+        )
+        self.client.login(username=username, password=password)
+        return self.token
 
     def login_a_user(self, username="", password=""):
         url = reverse(
@@ -52,10 +81,16 @@ class BaseViewTest(APITestCase):
 class GetAllSongsTest(BaseViewTest):
 
     def test_get_all_songs(self):
-
+        # this is the update you need to add to the test, login
+        self.login_client('test_user', 'testing')
         response= self.client.get(
             reverse("songs-all", kwargs={"version": "v1"})
         )
+
+        expected = Songs.objects.all()
+        serialized = SongSerializer(expected, many=True)
+        self.assertEqual(response.data, serialized.data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class AuthLoginUserTest(BaseViewTest):
